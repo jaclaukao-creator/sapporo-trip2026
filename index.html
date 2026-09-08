@@ -1,0 +1,1246 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<!-- 手機優先：這一行讓網頁在手機上以正確寬度顯示 -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第一次去札幌 好雪氣旅行團</title>
+<!-- 左上角小圖示(favicon)：土陶色圓角底＋白色「福」 -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20rx='24'%20fill='%23C87D55'/%3E%3Ctext%20x='50'%20y='73'%20font-size='62'%20text-anchor='middle'%20fill='white'%20font-family='serif'%20font-weight='bold'%3E雪%3C/text%3E%3C/svg%3E">
+<!-- 手機加到主畫面時顯示的標題 -->
+<meta name="apple-mobile-web-app-title" content="札幌好雪氣">
+<meta name="theme-color" content="#C87D55">
+
+<!-- ① Tailwind CSS：用 class 就能排版，不用自己寫一堆 CSS -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  // 自訂主題色（土陶暖色系，跟原版曼谷手冊同一個氣質）
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          brand:  '#C87D55',   // 主色（土陶橘）
+          brandDark: '#A65D3A',
+          cream:  '#FBF7F2',   // 背景奶油色
+          ink:    '#3A2E28'    // 深棕文字
+        },
+        fontFamily: {
+          serif: ['"Noto Serif TC"', '"Playfair Display"', 'serif'],
+          sans:  ['"Noto Sans TC"', '"Plus Jakarta Sans"', 'sans-serif']
+        }
+      }
+    }
+  }
+</script>
+
+<!-- ② Google 字型 -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Noto+Serif+TC:wght@600;700;900&family=Playfair+Display:wght@600;700&family=Plus+Jakarta+Sans:wght@500;700&display=swap" rel="stylesheet">
+
+<!-- ③ Lucide 圖示（<i data-lucide="plane"></i> 就能放一個圖示） -->
+<script src="https://unpkg.com/lucide@latest"></script>
+
+<!-- ④ Firebase（全團即時共用記帳用）。用第 8 版 compat，寫法最單純 -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+<style>
+  body{ background:#FBF7F2; color:#3A2E28; }
+  .font-serif{ font-family:'Noto Serif TC','Playfair Display',serif; }
+
+  /* 上方分頁：被選到的那顆底下出現一條橫線 */
+  .top-nav-item{ position:relative; color:#8a7c72; transition:.2s; }
+  .top-nav-item.active{ color:#A65D3A; font-weight:700; }
+  .top-nav-item.active::after{
+    content:''; position:absolute; left:12px; right:12px; bottom:-2px;
+    height:3px; border-radius:3px; background:#C87D55;
+  }
+  /* 主要區塊：一次只顯示一個（切分頁時切換） */
+  .main-view{ display:none; }
+  .main-view.active{ display:block; }
+
+  /* 時間軸左邊那條線 */
+  .timeline-line{ background:linear-gradient(#E7D3C5, #E7D3C5); }
+
+  /* 小探索徽章：完成後亮起來 */
+  .quest-card.done{ background:#F4E9DF; border-color:#C87D55; }
+
+  /* Toast 小提示 */
+  #toast{ transition:opacity .3s, transform .3s; }
+  .no-scrollbar::-webkit-scrollbar{ display:none; }
+  .no-scrollbar{ -ms-overflow-style:none; scrollbar-width:none; }
+</style>
+</head>
+
+<body class="font-sans pb-24">
+
+<!-- ===================== 上方固定分頁列 ===================== -->
+<header class="sticky top-0 z-40 bg-cream/95 backdrop-blur border-b border-[#EADFD4]">
+  <div class="max-w-xl mx-auto px-2">
+    <nav class="flex justify-between text-sm overflow-x-auto no-scrollbar">
+      <button id="top-tab-overview"   class="top-nav-item active px-3 py-3 whitespace-nowrap" onclick="switchMainTab('overview')">總覽</button>
+      <button id="top-tab-itinerary"  class="top-nav-item px-3 py-3 whitespace-nowrap" onclick="switchMainTab('itinerary')">行程</button>
+      <button id="top-tab-festival"   class="top-nav-item px-3 py-3 whitespace-nowrap" onclick="switchMainTab('festival')">慶典</button>
+      <button id="top-tab-alt"        class="top-nav-item px-3 py-3 whitespace-nowrap" onclick="switchMainTab('alt')">備選</button>
+      <button id="top-tab-japanese"   class="top-nav-item px-3 py-3 whitespace-nowrap" onclick="switchMainTab('japanese')">保命日語</button>
+      <button id="top-tab-shopping"   class="top-nav-item px-3 py-3 whitespace-nowrap" onclick="switchMainTab('shopping')">必買</button>
+      <button id="top-tab-accounting" class="top-nav-item px-3 py-3 whitespace-nowrap" onclick="switchMainTab('accounting')">分帳</button>
+    </nav>
+  </div>
+</header>
+
+<main class="max-w-xl mx-auto px-4">
+
+<!-- ============================================================= -->
+<!-- 分頁 1：總覽                                                    -->
+<!-- ============================================================= -->
+<section id="view-overview" class="main-view active">
+
+  <!-- Hero 主視覺 -->
+  <div class="relative rounded-3xl overflow-hidden mt-4 shadow-lg">
+    <div class="w-full h-56" style="background:linear-gradient(135deg,#1f2d47,#3d5a80 55%,#98c1d9)"></div>
+    <div class="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent"></div>
+    <div class="absolute bottom-0 p-5 text-white">
+      <p class="text-xs tracking-widest opacity-80">SAPPORO · HOKKAIDO</p>
+      <h1 class="font-serif text-3xl font-bold leading-tight">第一次去札幌<br>好雪氣旅行團</h1>
+    </div>
+  </div>
+
+  <!-- 旅程資訊卡 -->
+  <div class="grid grid-cols-3 gap-3 mt-4">
+    <div class="bg-white rounded-2xl p-3 text-center shadow-sm">
+      <p class="text-2xl font-bold text-brand">7</p><p class="text-xs text-gray-500">天 6 夜</p>
+    </div>
+    <div class="bg-white rounded-2xl p-3 text-center shadow-sm">
+      <p class="text-2xl font-bold text-brand">4</p><p class="text-xs text-gray-500">位團員</p>
+    </div>
+    <div class="bg-white rounded-2xl p-3 text-center shadow-sm">
+      <p class="text-2xl font-bold text-brand">約¥13萬</p><p class="text-xs text-gray-500">每人預算</p>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-2xl p-4 mt-3 shadow-sm">
+    <div class="flex items-center gap-2 text-sm">
+      <i data-lucide="calendar" class="w-4 h-4 text-brand"></i>
+      <span>2026 / 12 / 03（四）－ 12 / 09（三）</span>
+    </div>
+    <div class="flex items-center gap-2 text-sm mt-2">
+      <i data-lucide="hotel" class="w-4 h-4 text-brand"></i>
+      <span>住宿：小樽「錦園」和室三人房(前2晚) · 札幌 W401(南6西12，後4晚)</span>
+    </div>
+  </div>
+
+  <!-- 天氣・穿搭 -->
+  <h2 class="font-serif text-xl font-bold mt-6 mb-2 flex items-center gap-2">
+    <i data-lucide="snowflake" class="w-5 h-5 text-brand"></i>天氣・穿搭（寒冬雪國）
+  </h2>
+  <div class="bg-white rounded-2xl p-4 shadow-sm text-sm leading-relaxed space-y-2">
+    <p>12月的札幌是<b class="text-brandDark">正式的雪國寒冬</b>：白天約 <b>0°C</b>、早晚低到 <b>-6°C</b>，會下雪、路面常結冰。</p>
+    <p><b class="text-brandDark">穿搭：</b>洋蔥式＋<b>羽絨大衣</b>、發熱衣、手套毛帽圍巾；室內暖氣很強，方便穿脫。</p>
+    <p><b class="text-brandDark">最重要：</b>一雙<b>防滑雪靴</b>！札幌人行道結冰很滑，一般鞋容易跌倒；暖暖包多帶。</p>
+    <p><b class="text-brandDark">提醒：</b>冬天日照短、約16:00天就黑，景點早點出發；空氣乾，護唇＋乳液必備。</p>
+  </div>
+
+  <!-- 總預算明細 -->
+  <h2 class="font-serif text-xl font-bold mt-6 mb-2 flex items-center gap-2">
+    <i data-lucide="piggy-bank" class="w-5 h-5 text-brand"></i>預算明細（每人・估算）
+  </h2>
+  <div class="bg-white rounded-2xl p-4 shadow-sm text-sm">
+    <div class="flex justify-between py-1"><span>✈️ 機票 桃園⇄新千歲</span><span class="font-semibold">哩程／亞航 NT$0~13,000</span></div>
+    <div class="flex justify-between py-1"><span>🏨 住宿 6 晚（2人一室分攤）</span><span class="font-semibold">¥42,000~66,000</span></div>
+    <div class="flex justify-between py-1"><span>🚃 當地交通・餐飲・景點（7天）</span><span class="font-semibold">約 ¥55,000</span></div>
+    <div class="flex justify-between py-1"><span>🛍️ 伴手禮・購物（自由）</span><span class="font-semibold">¥10,000~25,000</span></div>
+    <div class="flex justify-between pt-3 mt-2 border-t border-[#F0E6DC] text-brandDark">
+      <span class="font-bold">預估總計</span><span class="font-bold">約 ¥12萬~16萬＋機票</span>
+    </div>
+    <p class="text-xs text-gray-400 mt-3">※ 冬季北海道住宿偏高、JR特急日行程較貴；yoyo用哩程、高搭亞航，機票落差大。金額抓大概，方便估錢用。</p>
+  </div>
+
+  <!-- 出發前檢查清單（勾選狀態存在瀏覽器裡） -->
+  <h2 class="font-serif text-xl font-bold mt-6 mb-2 flex items-center gap-2">
+    <i data-lucide="check-check" class="w-5 h-5 text-brand"></i>出發前檢查清單
+  </h2>
+  <div id="checklist" class="bg-white rounded-2xl p-2 shadow-sm"></div>
+
+  <!-- 交通指南 -->
+  <h2 class="font-serif text-xl font-bold mt-6 mb-2 flex items-center gap-2">
+    <i data-lucide="train-front" class="w-5 h-5 text-brand"></i>交通懶人包
+  </h2>
+  <div class="bg-white rounded-2xl p-4 shadow-sm space-y-3 text-sm leading-relaxed">
+    <p><b class="text-brandDark">IC 卡：</b>北海道在地卡是 <b>Kitaca</b>；台灣帶去的 Suica、ICOCA 也能直接刷地鐵、市電、JR。便利商店也能付款。</p>
+    <p><b class="text-brandDark">機場進市區：</b>新千歲空港站搭 <b>JR 快速エアポート</b> 到<b>札幌站最快 33 分（¥1,150）</b>，每 15 分一班。行李多、人多時最穩。</p>
+    <p><b class="text-brandDark">市區移動：</b>地下鐵(南北・東西・東豊線)＋市電為主。整天跑市區可買<b>地下鐵一日券(平日¥830／週末¥520)</b>。</p>
+    <p><b class="text-brandDark">近郊：</b>小樽(JR快速約40分¥750)、登別(JR特急約70分)、旭川／旭山動物園(JR特急約85分)。<b>冬季雪會誤點，提早出門</b>。</p>
+    <p><b class="text-brandDark">叫車：</b>用 <b>GO</b> 或 <b>DiDi</b> App；雪天不好路邊招車，用 App 較穩。</p>
+  </div>
+
+  <!-- 付款方式 -->
+  <h2 class="font-serif text-xl font-bold mt-6 mb-2 flex items-center gap-2">
+    <i data-lucide="wallet" class="w-5 h-5 text-brand"></i>付款方式
+  </h2>
+  <div class="bg-white rounded-2xl p-4 shadow-sm text-sm leading-relaxed space-y-2">
+    <p>大城市刷卡、電子支付普及，但<b>屋台、小店、神社周邊常常只收現金</b>，建議每人先換 3～5 萬日圓現金。</p>
+    <p>行動支付：PayPay 最普及（需日本帳號較難用），觀光客最穩的還是<b>現金＋國際信用卡（Visa / Master）</b>。</p>
+  </div>
+
+  <!-- 緊急資訊 -->
+  <h2 class="font-serif text-xl font-bold mt-6 mb-2 flex items-center gap-2">
+    <i data-lucide="siren" class="w-5 h-5 text-brand"></i>緊急資訊
+  </h2>
+  <div class="bg-white rounded-2xl p-4 shadow-sm text-sm space-y-2">
+    <p><b>航班 yoyo：</b>星宇 去 JX850 12/3 09:20→14:05、回 JX851 12/9 15:20→19:05（哩程換）</p>
+    <p><b>航班 高：</b>亞航 去 FD242 12/3 07:30→12:00、回 FD243 12/9 14:00→17:55</p>
+    <p><b>報警：</b>110（警察）／ 119（火災・救護車）</p>
+    <p><b>台北駐札幌辦事處：</b>+81-11-222-2930</p>
+    <p><b>領隊：</b>yoyo +886-9xx-xxx-xxx</p>
+    <a href="https://www.google.com/maps/search/札幌站前飯店" target="_blank"
+       class="inline-flex items-center gap-1 text-brand font-semibold mt-1">
+       <i data-lucide="map-pin" class="w-4 h-4"></i>飯店地圖導航
+    </a>
+  </div>
+
+  <!-- 實用連結 -->
+  <h2 class="font-serif text-xl font-bold mt-6 mb-2 flex items-center gap-2">
+    <i data-lucide="link" class="w-5 h-5 text-brand"></i>實用連結
+  </h2>
+  <div class="grid grid-cols-2 gap-3">
+    <a href="https://www.vjw.digital.go.jp/" target="_blank" class="bg-white rounded-2xl p-4 shadow-sm text-sm font-semibold flex items-center gap-2">
+      <i data-lucide="qr-code" class="w-5 h-5 text-brand"></i>Visit Japan Web 入境登錄
+    </a>
+    <a href="https://www.google.com/search?q=北海道+eSIM" target="_blank" class="bg-white rounded-2xl p-4 shadow-sm text-sm font-semibold flex items-center gap-2">
+      <i data-lucide="wifi" class="w-5 h-5 text-brand"></i>eSIM 上網卡
+    </a>
+    <a href="https://www.city.sapporo.jp/st/" target="_blank" class="bg-white rounded-2xl p-4 shadow-sm text-sm font-semibold flex items-center gap-2">
+      <i data-lucide="train" class="w-5 h-5 text-brand"></i>札幌市交通局
+    </a>
+    <a href="https://www.google.com/maps/place/Sapporo" target="_blank" class="bg-white rounded-2xl p-4 shadow-sm text-sm font-semibold flex items-center gap-2">
+      <i data-lucide="map" class="w-5 h-5 text-brand"></i>札幌地圖
+    </a>
+    <a href="https://www.kkday.com/zh-tw/search?keyword=北海道%20包車" target="_blank" class="bg-white rounded-2xl p-4 shadow-sm text-sm font-semibold flex items-center gap-2">
+      <i data-lucide="car-front" class="w-5 h-5 text-brand"></i>KKday 包車預約
+    </a>
+    <a href="https://www.klook.com/zh-TW/search/?query=北海道包車" target="_blank" class="bg-white rounded-2xl p-4 shadow-sm text-sm font-semibold flex items-center gap-2">
+      <i data-lucide="car-front" class="w-5 h-5 text-brand"></i>Klook 包車預約
+    </a>
+  </div>
+
+  <p class="text-center text-xs text-gray-400 mt-8">📸 建議把這頁存成書籤，離線時截圖也看得到重點</p>
+</section>
+
+<!-- ============================================================= -->
+<!-- 分頁 2：行程                                                    -->
+<!-- ============================================================= -->
+<section id="view-itinerary" class="main-view">
+
+  <!-- 每一天的小分頁 -->
+  <div id="day-tabs" class="flex gap-2 mt-4 overflow-x-auto no-scrollbar"></div>
+
+  <!-- 圖例 -->
+  <div class="flex items-center gap-3 mt-3 text-[11px] text-gray-500 flex-wrap">
+    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-brand"></span>順路輕鬆玩</span>
+    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-400"></span>可省略加碼</span>
+    <span>· 🍽 餐點點開看3家推薦 · ✦ 景點點開玩小探索</span>
+  </div>
+
+  <!-- 當天地圖 -->
+  <div class="rounded-2xl overflow-hidden shadow-sm mt-3 border border-[#EADFD4]">
+    <iframe id="day-map" class="w-full h-48" style="border:0" loading="lazy"></iframe>
+  </div>
+
+  <!-- 當天亮點 -->
+  <div id="day-highlights" class="grid grid-cols-2 gap-3 mt-3"></div>
+
+  <!-- 當天時間軸 -->
+  <div id="day-timeline" class="mt-4"></div>
+
+  <!-- 小探索重置鈕 -->
+  <div class="text-center mt-6">
+    <button onclick="resetQuestState()" class="text-xs text-gray-400 underline">重置所有小探索紀錄</button>
+  </div>
+</section>
+
+<!-- ============================================================= -->
+<!-- 分頁：慶典（那時段北海道的活動，參考要不要排進行程）              -->
+<!-- ============================================================= -->
+<section id="view-festival" class="main-view">
+  <h2 class="font-serif text-2xl font-bold mt-5 mb-1">北海道冬季活動 ❄️</h2>
+  <p class="text-sm text-gray-500 mb-4">你們檔期(12/3~12/9)剛好遇到的冬季點燈與聖誕市集，點連結看介紹</p>
+  <div id="festival-container" class="space-y-4"></div>
+  <p class="text-center text-xs text-gray-400 mt-6">日期以官網為準，出發前再確認一次</p>
+</section>
+
+<!-- ============================================================= -->
+<!-- 分頁：備選（沒排進行程的北海道必去＋美食，臨時想改也有參考） -->
+<!-- ============================================================= -->
+<section id="view-alt" class="main-view">
+  <h2 class="font-serif text-2xl font-bold mt-5 mb-1">備選口袋名單 🎒</h2>
+  <p class="text-sm text-gray-500 mb-4">沒排進行程、但很值得的北海道景點與美食。臨時想換、有空檔，就從這裡挑</p>
+  <div id="alt-container" class="space-y-5"></div>
+  <p class="text-center text-xs text-gray-400 mt-6">點「地圖・評價」看位置與評分，「影片」看網友介紹</p>
+</section>
+
+<!-- ============================================================= -->
+<!-- 分頁 3：保命日語                                                -->
+<!-- ============================================================= -->
+<section id="view-japanese" class="main-view">
+  <h2 class="font-serif text-2xl font-bold mt-5 mb-1">保命日語 🍶</h2>
+  <p class="text-sm text-gray-500 mb-4">點一下就能大聲唸出來的關鍵句</p>
+  <div id="phrase-container" class="space-y-5"></div>
+</section>
+
+<!-- ============================================================= -->
+<!-- 分頁 4：必買                                                    -->
+<!-- ============================================================= -->
+<section id="view-shopping" class="main-view">
+  <h2 class="font-serif text-2xl font-bold mt-5 mb-1">必買清單 🛍️</h2>
+  <p class="text-sm text-gray-500 mb-4">買到就打勾（紀錄會存在這支手機）</p>
+  <div id="shopping-container" class="space-y-5"></div>
+</section>
+
+<!-- ============================================================= -->
+<!-- 分頁 5：分帳（Firebase 即時共用）                               -->
+<!-- ============================================================= -->
+<section id="view-accounting" class="main-view">
+  <h2 class="font-serif text-2xl font-bold mt-5 mb-1">團體分帳 💴</h2>
+  <p class="text-sm text-gray-500 mb-4">全團即時共用，誰付了什麼、最後誰要還誰，自動算</p>
+
+  <!-- 若尚未設定 Firebase，顯示教學卡（設定好就會自動消失） -->
+  <div id="firebase-setup" class="hidden bg-amber-50 border border-amber-300 rounded-2xl p-4 text-sm leading-relaxed">
+    <p class="font-bold text-amber-800 mb-2">⚠️ 分帳功能尚未啟用</p>
+    <p>這個功能需要一個免費的 Firebase 後端。請看附上的教學文件「STEP 5：設定 Firebase」，把你的設定金鑰貼進 HTML 檔最下方的 <code class="bg-white px-1 rounded">firebaseConfig</code>，存檔後這張卡就會消失、分帳就會啟用。</p>
+  </div>
+
+  <!-- 匯率設定 -->
+  <div id="acc-body" class="hidden">
+    <div class="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-2 text-sm">
+      <span>匯率　1 JPY =</span>
+      <input id="acc-rate-input" type="number" step="0.001" value="0.215"
+             onchange="updateRate()" class="w-20 border rounded-lg px-2 py-1 text-center">
+      <span>TWD</span>
+    </div>
+
+    <!-- 新增一筆花費 -->
+    <div class="bg-white rounded-2xl p-4 shadow-sm mt-3 space-y-3">
+      <input id="exp-title" placeholder="花費項目（例：一蘭拉麵）" class="w-full border rounded-lg px-3 py-2 text-sm">
+      <div class="flex gap-2">
+        <input id="exp-amount" type="number" placeholder="金額" class="flex-1 border rounded-lg px-3 py-2 text-sm">
+        <select id="exp-currency" class="border rounded-lg px-2 py-2 text-sm">
+          <option value="JPY">JPY 日圓</option>
+          <option value="TWD">TWD 台幣</option>
+        </select>
+      </div>
+      <div class="flex gap-2">
+        <select id="exp-payer" class="flex-1 border rounded-lg px-2 py-2 text-sm"></select>
+        <select id="exp-category" class="border rounded-lg px-2 py-2 text-sm">
+          <option>🍜 餐飲</option><option>🚃 交通</option><option>🛍️ 購物</option>
+          <option>🎫 景點</option><option>💊 其他</option>
+        </select>
+      </div>
+      <div>
+        <p class="text-xs text-gray-500 mb-1">這筆要分給誰（預設全選）：</p>
+        <div id="exp-beneficiaries" class="flex flex-wrap gap-2"></div>
+      </div>
+      <button onclick="addExpense()" class="w-full bg-brand text-white rounded-lg py-2 font-bold">＋ 記一筆</button>
+    </div>
+
+    <!-- 結算：誰要還誰 -->
+    <h3 class="font-serif text-lg font-bold mt-6 mb-2">💰 結算（誰還誰）</h3>
+    <div id="settlement-list" class="space-y-2"></div>
+
+    <!-- 每人結餘 -->
+    <h3 class="font-serif text-lg font-bold mt-6 mb-2">👥 每人結餘</h3>
+    <div id="members-balance-container" class="grid grid-cols-2 gap-2"></div>
+
+    <!-- 所有花費明細 -->
+    <h3 class="font-serif text-lg font-bold mt-6 mb-2">🧾 花費明細</h3>
+    <div id="expense-list-container" class="space-y-2"></div>
+  </div>
+</section>
+
+</main>
+
+<!-- 小探索 Modal -->
+<div id="quest-modal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-4">
+  <div class="bg-cream rounded-3xl p-6 w-full max-w-md">
+    <div class="flex justify-between items-start">
+      <div class="flex items-center gap-2">
+        <div class="w-10 h-10 rounded-full bg-brand/15 flex items-center justify-center">
+          <i id="quest-icon" data-lucide="sparkles" class="w-5 h-5 text-brand"></i>
+        </div>
+        <h3 id="quest-title" class="font-serif text-xl font-bold"></h3>
+      </div>
+      <button onclick="closeQuest()"><i data-lucide="x" class="w-5 h-5 text-gray-400"></i></button>
+    </div>
+    <p id="quest-desc" class="text-sm text-gray-600 mt-3"></p>
+    <p id="quest-question" class="font-bold mt-4 mb-2"></p>
+    <div id="quest-options" class="space-y-2"></div>
+    <p class="text-xs text-brand mt-4 flex items-center gap-1">
+      <i data-lucide="award" class="w-4 h-4"></i>完成後可獲得徽章：<span id="quest-reward" class="font-bold"></span>
+    </p>
+  </div>
+</div>
+
+<!-- 餐點 3 選 Modal -->
+<div id="dining-modal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-4" onclick="if(event.target===this)closeDining()">
+  <div class="bg-cream rounded-3xl p-6 w-full max-w-md max-h-[82vh] overflow-y-auto">
+    <div class="flex justify-between items-start mb-1">
+      <div class="flex items-center gap-2">
+        <div class="w-10 h-10 rounded-full bg-brand/15 flex items-center justify-center">
+          <i data-lucide="utensils" class="w-5 h-5 text-brand"></i>
+        </div>
+        <h3 id="dining-title" class="font-serif text-xl font-bold"></h3>
+      </div>
+      <button onclick="closeDining()"><i data-lucide="x" class="w-5 h-5 text-gray-400"></i></button>
+    </div>
+    <p id="dining-tip" class="text-sm text-gray-500 mb-4"></p>
+    <div id="dining-list" class="space-y-3"></div>
+    <p class="text-[11px] text-gray-400 mt-4">點「地圖・評價」看最新評分與照片，「影片」看網友實吃分享。</p>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="fixed bottom-24 left-1/2 -translate-x-1/2 bg-ink text-white text-sm px-4 py-2 rounded-full opacity-0 pointer-events-none z-50"></div>
+
+<script>
+/* =================================================================
+   資料區：改行程只要改這裡
+   ================================================================= */
+
+// —— 團員名單（分帳、探索都會用到）——
+const MEMBERS = ['yoyo','高','玉萍','阿靜'];
+
+// —— 逐日行程 ——
+// 每一天：dateStr 日期、title 標題、desc 一句話、mapQuery 地圖搜尋字、
+//        highlights 亮點卡、activities 時間軸（time/icon/title/sub/category）
+const tripDaysData = {
+  1: {
+    dateStr: "12.03 (四)",
+    title: "直奔小樽 · 運河夜 · 泡湯",
+    desc: "下飛機直接殺到小樽 → 入住錦園 → 運河夜散步 → 泡湯暖身",
+    mapQuery: "小樽運河",
+    transport: "新千歲空港→小樽 JR快速エアポート約1小時16分(¥1,910)直達，或經札幌轉車；行李直接進小樽錦園",
+    budget: "約 ¥4,500 /人(JR進小樽+晚餐，不含購物)",
+    highlights: [
+      { title: "小樽運河", sub: "瓦斯燈雪景", key: "d1_canal" },
+      { title: "錦園泡湯", sub: "和室泡湯暖身", key: "d1_onsen" },
+    ],
+    activities: [
+      { time:"~13:00", icon:"plane",     title:"抵達新千歲空港",        sub:"星宇14:05／亞航12:00，入境領行李", category:"交通" },
+      { time:"14:00", icon:"train-front", title:"JR 直奔小樽",          sub:"快速エアポート約1h16(¥1,910)", category:"交通" },
+      { time:"16:00", icon:"hotel",     title:"入住 小樽「錦園」",      sub:"和室三人房・庭園景，放行李", category:"住宿" },
+      { time:"17:00", icon:"waves",     title:"小樽運河散步",         sub:"夜晚瓦斯燈雪景｜點我看介紹＋小探索", category:"景點", opt:false },
+      { time:"18:30", icon:"utensils",  title:"晚餐：小樽壽司／炸半雞", sub:"點我看 3 家推薦", category:"餐飲", dining:"d1_dinner", opt:false },
+      { time:"20:00", icon:"droplets",  title:"錦園 泡湯暖身",         sub:"回旅館泡溫泉、早點休息", category:"住宿", opt:false },
+    ]
+  },
+  2: {
+    dateStr: "12.04 (五)",
+    title: "余市威士忌 · 小樽慢遊",
+    desc: "余市蒸溜所試飲 → 堺町通玻璃 → 三角市場 → 甜點 → 運河點燈(續住錦園)",
+    mapQuery: "ニッカウヰスキー 余市蒸溜所",
+    transport: "小樽⇄余市 JR約25分(¥360)；今晚續住小樽錦園，不用搬行李",
+    budget: "約 ¥6,000 /人(JR+午餐+甜點+玻璃小物)",
+    highlights: [
+      { title: "余市威士忌", sub: "免費見學＋試飲", key: "d2_whisky" },
+      { title: "小樽美食", sub: "壽司・炸雞・海鮮", key: "d2_food" },
+    ],
+    activities: [
+      { time:"09:30", icon:"train",     title:"JR 前往余市",          sub:"約25分(¥360)", category:"交通" },
+      { time:"10:00", icon:"landmark",  title:"余市 ニッカ蒸溜所",     sub:"點我看介紹＋小探索(免費見學+試飲)", category:"景點", opt:false },
+      { time:"12:00", icon:"utensils",  title:"午餐：余市／小樽海鮮",   sub:"點我看 3 家推薦", category:"餐飲", dining:"d2_lunch", opt:false },
+      { time:"13:30", icon:"train-front", title:"JR 回小樽",          sub:"", category:"交通" },
+      { time:"14:15", icon:"store",     title:"堺町通 老街",          sub:"點我看介紹＋小探索(北一硝子、音樂盒)", category:"景點", opt:false },
+      { time:"15:15", icon:"store",     title:"三角市場",            sub:"點我看介紹＋小探索(車站旁海鮮)", category:"景點", opt:true },
+      { time:"16:00", icon:"cookie",    title:"小樽甜點：LeTAO 等",    sub:"點我看 3 家推薦", category:"餐飲", dining:"d2_snack", opt:true },
+      { time:"16:45", icon:"sparkles",  title:"小樽運河 黃昏點燈",     sub:"青之運河，傍晚最美", category:"景點", opt:false },
+      { time:"18:30", icon:"utensils",  title:"晚餐：小樽(或錦園会席)", sub:"點我看 3 家推薦", category:"餐飲", dining:"d2_dinner", opt:false },
+    ]
+  },
+  3: {
+    dateStr: "12.05 (六)",
+    title: "移動札幌 · 北大 六花亭 大通燈海",
+    desc: "小樽悠閒早晨 → 移動札幌W401 → 二条海鮮 → 北大／舊道廳／六花亭 → 大通白色燈樹節＋聖誕市集",
+    mapQuery: "大通公園 札幌",
+    transport: "小樽→札幌 JR快速約40分(¥750)；行李進 W401(南6西12，近市電・狸小路)後開始玩市區",
+    budget: "約 ¥6,000 /人(JR+海鮮丼+甜點)",
+    highlights: [
+      { title: "北大雪景", sub: "校園散步", key: "d3_hokudai" },
+      { title: "白色燈樹節", sub: "大通燈海", key: "d3_illumi" },
+    ],
+    activities: [
+      { time:"09:30", icon:"hotel",     title:"小樽退房・悠閒早晨",     sub:"錦園早餐、拍庭園雪景", category:"住宿" },
+      { time:"10:30", icon:"train",     title:"小樽 → 札幌",          sub:"JR快速約40分(¥750)", category:"交通" },
+      { time:"11:30", icon:"hotel",     title:"札幌 W401 寄行李",      sub:"南6西12，近市電・狸小路", category:"住宿" },
+      { time:"12:00", icon:"utensils",  title:"午餐：二条市場海鮮丼",  sub:"點我看 3 家推薦", category:"餐飲", dining:"d3_lunch", opt:false },
+      { time:"13:30", icon:"landmark",  title:"北海道大學 散步",       sub:"點我看介紹＋小探索(校園雪景)", category:"景點", opt:false },
+      { time:"15:00", icon:"building",  title:"舊道廳 紅磚廳舍",       sub:"點我看介紹＋小探索(歷史建物)", category:"景點", opt:true },
+      { time:"15:45", icon:"coffee",    title:"六花亭 札幌本店",       sub:"點我看介紹＋小探索(甜點+咖啡)", category:"景點", opt:false },
+      { time:"17:30", icon:"sparkles",  title:"大通公園 白色燈樹節",   sub:"點我看介紹＋小探索", category:"景點", opt:false },
+      { time:"18:30", icon:"gift",      title:"慕尼黑聖誕市集",        sub:"點我看介紹＋小探索", category:"景點", opt:false },
+      { time:"19:30", icon:"utensils",  title:"晚餐：湯咖哩 Soup Curry", sub:"點我看 3 家推薦", category:"餐飲", dining:"d3_dinner", opt:false },
+    ]
+  },
+  4: {
+    dateStr: "12.06 (日)",
+    title: "旭川動物園 · 旭川拉麵",
+    desc: "衝旭山動物園看行動展示(企鵝散步12月中下旬才開始) → 旭川醬油拉麵",
+    mapQuery: "旭山動物園",
+    transport: "JR特急カムイ／ライラック 札幌→旭川約85分，再轉巴士到動物園約40分；或參加一日巴士團最省事",
+    budget: "約 ¥9,500 /人(JR特急來回+門票¥1,000+旭川拉麵)",
+    highlights: [
+      { title: "旭山動物", sub: "行動展示・北極熊", key: "d4_zoo" },
+      { title: "旭川拉麵", sub: "醬油系", key: "d4_ramen" },
+    ],
+    activities: [
+      { time:"08:00", icon:"train",     title:"JR特急 前往旭川",       sub:"約85分，雪景鐵道", category:"交通" },
+      { time:"10:00", icon:"bird",      title:"旭山動物園(冬季)",      sub:"點我看介紹＋小探索", category:"景點", opt:false },
+      { time:"13:00", icon:"utensils",  title:"午餐：旭川醬油拉麵",     sub:"點我看 3 家推薦", category:"餐飲", dining:"d4_lunch", opt:false },
+      { time:"14:30", icon:"shopping-bag", title:"旭川車站周邊(加碼)", sub:"AEON MALL、伴手禮，時間夠再逛", category:"購物", opt:true },
+      { time:"16:00", icon:"train-front", title:"JR 回札幌",          sub:"約85分", category:"交通" },
+      { time:"19:00", icon:"utensils",  title:"晚餐：札幌螃蟹／居酒屋", sub:"點我看 3 家推薦", category:"餐飲", dining:"d4_dinner", opt:false },
+    ]
+  },
+  5: {
+    dateStr: "12.07 (一)",
+    title: "圓山 · 動物園 · 藻岩夜景",
+    desc: "北海道神宮 → 圓山動物園(雪中北極熊) → 湯咖哩 → 藻岩山夜景 → 成吉思汗",
+    mapQuery: "円山動物園 札幌",
+    transport: "地下鐵東西線『圓山公園』站，市區近、不用早起；傍晚上藻岩山看夜景",
+    budget: "約 ¥6,000 /人(交通+動物園¥800+纜車+成吉思汗)",
+    highlights: [
+      { title: "圓山動物園", sub: "雪中北極熊", key: "d5_zoo" },
+      { title: "藻岩山夜景", sub: "日本新三大夜景", key: "d5_yakei" },
+    ],
+    activities: [
+      { time:"09:30", icon:"landmark",  title:"北海道神宮",           sub:"點我看介紹＋小探索(境內六花亭麻糬)", category:"景點", opt:false },
+      { time:"11:00", icon:"bird",      title:"圓山動物園",           sub:"點我看介紹＋小探索(雪中北極熊、雪豹)", category:"景點", opt:false },
+      { time:"13:00", icon:"utensils",  title:"午餐：圓山／大通 食事",  sub:"點我看 3 家推薦", category:"餐飲", dining:"d5_lunch", opt:false },
+      { time:"14:30", icon:"hotel",     title:"回 W401 暖身休息",      sub:"歇腳、避開最冷時段", category:"住宿" },
+      { time:"16:30", icon:"mountain",  title:"藻岩山 纜車夜景",       sub:"點我看介紹＋小探索", category:"景點", opt:false },
+      { time:"19:00", icon:"utensils",  title:"晚餐：成吉思汗烤羊",    sub:"點我看 3 家推薦", category:"餐飲", dining:"d5_dinner", opt:false },
+    ]
+  },
+  6: {
+    dateStr: "12.08 (二)",
+    title: "自由採購 · 聖誕夜告別",
+    desc: "場外市場早餐 → 中島公園雪散步 → 大丸／BicCamera掃貨 → 聖誕市集告別 → 蟹",
+    mapQuery: "札幌 狸小路",
+    transport: "市區地下鐵＋市電；購物集中札幌站與狸小路，中島公園就在W401附近",
+    budget: "約 ¥4,000 /人(交通+餐；購物另計)",
+    highlights: [
+      { title: "海鮮早市", sub: "場外市場", key: "d6_market" },
+      { title: "聖誕市集", sub: "熱紅酒告別", key: "d6_xmas" },
+    ],
+    activities: [
+      { time:"08:30", icon:"utensils",  title:"早餐：札幌場外市場",     sub:"點我看 3 家推薦", category:"餐飲", dining:"d6_lunch", opt:false },
+      { time:"10:00", icon:"store",     title:"札幌場外市場",         sub:"採買帝王蟹、干貝乾｜點我看介紹＋小探索", category:"景點", opt:true },
+      { time:"11:30", icon:"landmark",  title:"中島公園",             sub:"近W401，雪中歷史建物散步｜點我看介紹＋小探索", category:"景點", opt:true },
+      { time:"13:00", icon:"shopping-bag", title:"大丸・BicCamera・狸小路", sub:"電器、藥妝、伴手禮慢慢挑", category:"購物", opt:false },
+      { time:"16:00", icon:"hotel",     title:"回 W401 打包戰利品",     sub:"歇腳、行李打包", category:"住宿" },
+      { time:"17:00", icon:"gift",      title:"慕尼黑聖誕市集",        sub:"最後一晚告別｜點我看介紹＋小探索", category:"景點", opt:false },
+      { time:"19:00", icon:"utensils",  title:"晚餐：すすきの 蟹／居酒屋", sub:"點我看 3 家推薦", category:"餐飲", dining:"d6_dinner", opt:false },
+    ]
+  },
+  7: {
+    dateStr: "12.09 (三)",
+    title: "新千歲機場 · 賦歸",
+    desc: "最後採買 → JR往機場 → 新千歲好逛好吃 → 回台北",
+    mapQuery: "新千歳空港",
+    transport: "JR快速エアポート 札幌→新千歲約37分(¥1,150)；冬季雪可能誤點，建議起飛前2.5小時到機場",
+    budget: "約 ¥3,000 /人(交通+機場餐；伴手禮另計)",
+    highlights: [
+      { title: "機場美食", sub: "拉麵道場", key: "d7_food" },
+      { title: "Royce 巧克力", sub: "機場工廠", key: "d7_royce" },
+    ],
+    activities: [
+      { time:"09:00", icon:"hotel",     title:"W401 退房、寄行李",      sub:"", category:"住宿" },
+      { time:"09:30", icon:"shopping-bag", title:"札幌站最後採買",     sub:"白色戀人、六花亭、薯條三兄弟", category:"購物", opt:false },
+      { time:"11:00", icon:"train",     title:"JR 前往新千歲機場",     sub:"約37分(¥1,150)", category:"交通" },
+      { time:"11:45", icon:"utensils",  title:"機場午餐：拉麵道場",     sub:"點我看 3 家推薦", category:"餐飲", dining:"d7_lunch", opt:false },
+      { time:"12:30", icon:"gift",      title:"新千歲機場 掃貨",       sub:"點我看介紹＋小探索(Royce、哆啦A夢)", category:"景點", opt:false },
+      { time:"14:00", icon:"plane",     title:"新千歲 → 桃園",        sub:"亞航14:00／星宇15:20，依你的班機", category:"交通" },
+    ]
+  }
+};
+
+// —— 小探索任務（遊戲化徽章）——
+// key 要跟上面 highlights 的 key 對得起來
+const questData = {
+  d1_canal:   { title:"運河漫步",   icon:"waves",     desc:"抵達當晚沿小樽運河散步，看瓦斯燈映著雪景與紅磚倉庫。", question:"運河最美時刻？", options:["白天雪景","黃昏點燈","飄雪中","畫家幫你畫像"], reward:"小樽運河旅人" },
+  d1_onsen:   { title:"泡湯時光",   icon:"droplets",  desc:"回錦園泡個溫泉，把一路的舟車勞頓暖化掉。", question:"泡完的感覺？", options:["通體舒暢","皮膚滑溜","懶得起來","秒睡"], reward:"溫泉愛好者" },
+  d2_whisky:  { title:"威士忌獵人", icon:"landmark",  desc:"在余市蒸溜所看石炭直火蒸餾、試飲一杯 Nikka 威士忌。", question:"你最想？", options:["試飲威士忌","看蒸餾窯","逛紅磚酒庫","買限定酒"], reward:"余市威士忌客" },
+  d2_food:    { title:"小樽美食控", icon:"utensils",  desc:"在小樽吃壽司、炸半雞或海鮮，樣樣是名物。", question:"你選了？", options:["握壽司","若鶏炸半雞","海鮮丼","三樣都要"], reward:"小樽美食家" },
+  d3_hokudai: { title:"雪中散步",   icon:"landmark",  desc:"在北海道大學校園散步，銀杏並木或雪景都很美。", question:"校園最美的是？", options:["銀杏並木","白楊道","雪中紅磚","牛奶霜淇淋"], reward:"北大散步者" },
+  d3_illumi:  { title:"燈海獵人",   icon:"sparkles",  desc:"在大通公園走一趟白色燈樹節，被數十萬顆燈泡包圍。", question:"最打動你的燈景？", options:["樹梢燈海","巨型光雕","噴水池倒影","跟大家合照"], reward:"大通燈海旅人" },
+  d4_zoo:     { title:"雪國動物迷", icon:"bird",      desc:"看旭山動物園的行動展示與雪地動物(企鵝散步12月中下旬才開始)。", question:"今天最想看？", options:["北極熊","企鵝館","海豹隧道","雪地紅狐"], reward:"旭山動物園之友" },
+  d4_ramen:   { title:"旭川拉麵控", icon:"utensils",  desc:"吃一碗旭川醬油系拉麵，湯上浮著豬油鎖住熱度。", question:"感想？", options:["醬香夠味","湯超燙(暖)","比札幌喜歡","各有千秋"], reward:"醬油拉麵達人" },
+  d5_zoo:     { title:"圓山動物迷", icon:"bird",      desc:"在市區的圓山動物園看雪中北極熊、雪豹(近、不用早起)。", question:"你最想看？", options:["北極熊","雪豹","紅毛猩猩","企鵝館"], reward:"圓山動物園之友" },
+  d5_yakei:   { title:"夜景獵人",   icon:"mountain",  desc:"搭纜車上藻岩山，看日本新三大夜景。", question:"山頂天氣？", options:["超清澈","飄點雪","雲霧夢幻","冷到發抖也值得"], reward:"藻岩山夜景收藏家" },
+  d6_market:  { title:"海鮮早市控", icon:"utensils",  desc:"在場外市場吃碗海鮮丼或現烤干貝當早餐。", question:"早市你點了？", options:["海鮮丼","現烤干貝","毛蟹味噌湯","帝王蟹腳"], reward:"場外市場達人" },
+  d6_xmas:    { title:"聖誕市集控", icon:"gift",      desc:"在慕尼黑聖誕市集喝杯熱紅酒、逛德式小攤告別北海道。", question:"你被什麼收服？", options:["熱紅酒","香腸熱狗","聖誕雜貨","燈飾氛圍"], reward:"聖誕夜遊者" },
+  d7_food:    { title:"機場美食家", icon:"utensils",  desc:"在新千歲機場拉麵道場再嗑一碗北海道拉麵。", question:"回國前最後一碗？", options:["蝦味噌一幻","白樺山荘","松尾成吉思汗","選擇障礙"], reward:"新千歳饕客" },
+  d7_royce:   { title:"巧克力獵人", icon:"gift",      desc:"在機場 Royce 買生巧克力當最後伴手禮。", question:"你掃了幾盒？", options:["一盒嘗鮮","三盒剛好","整箱扛回"], reward:"Royce 收藏家" },
+};
+
+// —— 每餐 3 家推薦（點餐點會跳出，含地圖評價＋影片連結）——
+const diningOptions = {
+  d1_dinner:{ title:"Day1 晚餐 · 小樽壽司／炸半雞", tip:"抵達當晚吃小樽名物", items:[
+    { name:"政寿司 本店", note:"小樽壽司代表老店，職人手握" },
+    { name:"若鶏時代 なると 本店", note:"小樽名物『炸半雞』，皮酥肉多汁" },
+    { name:"伊勢鮨 小樽", note:"米其林肯定，食材講究" },
+  ]},
+  d2_lunch: { title:"Day2 午餐 · 余市／小樽海鮮", tip:"蒸溜所周邊或回小樽吃", items:[
+    { name:"柿崎商店 海鮮工房(余市)", note:"CP超高海鮮丼，在地人氣、就在余市站旁" },
+    { name:"三角市場 味処たけだ(小樽)", note:"小樽站旁市場食堂，海鮮丼豐盛" },
+    { name:"ニッカ会館 レストラン(余市)", note:"蒸溜所附近，配威士忌小酌" },
+  ]},
+  d2_snack: { title:"Day2 甜點 · 小樽洋菓子", tip:"堺町通甜點巡禮", items:[
+    { name:"LeTAO 本店", note:"雙層起司蛋糕名店，頂樓看街景" },
+    { name:"北菓楼 小樽本館", note:"妖精之森年輪蛋糕、泡芙" },
+    { name:"六花亭 小樽運河店", note:"奶油葡萄夾心餅，內用可配咖啡" },
+  ]},
+  d2_dinner:{ title:"Day2 晚餐 · 小樽(或錦園会席)", tip:"住錦園有含餐就享用会席", items:[
+    { name:"錦園 会席(住宿附餐)", note:"若訂房含晚餐就直接在旅館享用，最輕鬆" },
+    { name:"小樽 政寿司 本店", note:"想外食吃壽司會席的首選" },
+    { name:"小樽出抜小路 屋台村", note:"運河旁小攤聚落，熱鬧多選擇" },
+  ]},
+  d3_lunch: { title:"Day3 午餐 · 二条市場海鮮丼", tip:"回札幌先吃一碗海鮮", items:[
+    { name:"どんぶり茶屋 二条市場店", note:"觀光客最愛，丼料豐富、好點" },
+    { name:"大磯 二条市場", note:"新鮮實在，帝王蟹丼有名" },
+    { name:"北のグルメ亭 場外市場", note:"場外市場老店，早上就開" },
+  ]},
+  d3_dinner:{ title:"Day3 晚餐 · 湯咖哩 Soup Curry", tip:"北海道發源，暖身首選", items:[
+    { name:"スープカリー GARAKU", note:"排隊名店，香料層次豐富" },
+    { name:"Suage+ 本店", note:"知床雞、炸蔬菜大塊，人氣高" },
+    { name:"スープカレー lavi", note:"清爽系，辣度可選、對觀光客友善" },
+  ]},
+  d4_lunch: { title:"Day4 午餐 · 旭川醬油拉麵", tip:"旭川在地拉麵", items:[
+    { name:"梅光軒 本店", note:"旭川拉麵代表，醬油豚骨雙湯頭" },
+    { name:"蜂屋 五条店", note:"焦香豬油特色，老字號" },
+    { name:"山頭火 旭川本店", note:"鹽味豚骨發源，清爽濃厚兼具" },
+  ]},
+  d4_dinner:{ title:"Day4 晚餐 · 螃蟹／海鮮居酒屋", tip:"回札幌吃蟹暖身", items:[
+    { name:"かに本家 札幌駅前本店", note:"帝王蟹、松葉蟹套餐，體面招待" },
+    { name:"海味 はちきょう", note:"豪邁鮭魚卵『つっこ飯』名場面" },
+    { name:"氷雪の門", note:"蟹料理專門老店，氣氛佳" },
+  ]},
+  d5_lunch: { title:"Day5 午餐 · 圓山／大通", tip:"動物園後就近吃", items:[
+    { name:"麺屋 彩未", note:"味噌拉麵名店，近地下鐵圓山" },
+    { name:"スープカリー GARAKU", note:"大通近，湯咖哩暖身" },
+    { name:"札幌ら～めん共和国", note:"札幌站上方集結多家拉麵名店" },
+  ]},
+  d5_dinner:{ title:"Day5 晚餐 · 成吉思汗烤羊", tip:"北海道名物ジンギスカン", items:[
+    { name:"成吉思汗 だるま 本店", note:"すすきの元祖名店，煙火氣十足" },
+    { name:"札幌ジンギスカン しろくま", note:"羊肉品質好、觀光客友善" },
+    { name:"サッポロビール園", note:"啤酒工廠內烤肉，吃到飽＋新鮮啤酒" },
+  ]},
+  d6_lunch: { title:"Day6 早餐 · 札幌場外市場", tip:"海鮮丼配味噌湯", items:[
+    { name:"北のグルメ亭 場外市場", note:"招牌海鮮丼，早上就開" },
+    { name:"市場めし けん太", note:"份量足、價格實在的市場食堂" },
+    { name:"食堂 味の二幸", note:"現烤干貝、螃蟹味噌湯暖身" },
+  ]},
+  d6_dinner:{ title:"Day6 晚餐 · すすきの", tip:"最後一晚吃好料", items:[
+    { name:"かに将軍 札幌本店", note:"帝王蟹會席，體面又滿足" },
+    { name:"海鮮居酒屋 開陽亭", note:"北海道海鮮居酒屋，選擇多" },
+    { name:"串鳥 すすきの", note:"平價烤雞居酒屋，熱鬧輕鬆" },
+  ]},
+  d7_lunch: { title:"Day7 · 新千歲機場 拉麵道場", tip:"回國前最後一碗", items:[
+    { name:"えびそば 一幻 新千歳", note:"濃厚蝦湯拉麵，機場人氣王" },
+    { name:"白樺山荘 新千歳", note:"味噌拉麵＋免費水煮蛋，經典" },
+    { name:"松尾ジンギスカン 新千歳", note:"想吃肉收尾，機場也吃得到" },
+  ]},
+};
+
+// —— 每個景點的介紹＋小探索（點景點會跳出，完成留一枚回憶徽章）——
+const spotData = {
+  "余市 ニッカ蒸溜所": { icon:"landmark", desc:"余市是NHK晨間劇《阿政與愛莉》的舞台，ニッカウヰスキー余市蒸溜所可免費參觀石炭直火蒸餾窯、試飲威士忌，冬天雪中的紅屋頂石造建築超美。", question:"你最想？", options:["試飲威士忌","看蒸餾窯","逛紅磚酒庫","買限定酒"], reward:"余市威士忌客" },
+  "旭山動物園(冬季)": { icon:"bird", desc:"以『行動展示』聞名的旭山動物園，冬季看北極熊、海豹隧道、雪地動物最精彩；企鵝散步約12月中下旬才開始(2025為12/18)，你們12月初可能遇不到，但館內仍看得到企鵝。", question:"今天最想看？", options:["北極熊","企鵝館","海豹隧道","雪地紅狐"], reward:"旭山動物園之友" },
+  "大通公園 白色燈樹節": { icon:"sparkles", desc:"札幌冬季代表『白色燈樹節』，大通公園被數十萬顆燈泡點亮，從電視塔一路延伸，免費又浪漫的雪夜散步。", question:"最打動你的燈景？", options:["樹梢燈海","巨型光雕","噴水池倒影","跟大家合照"], reward:"大通燈海旅人" },
+  "慕尼黑聖誕市集": { icon:"gift", desc:"大通2丁目的德式聖誕市集(約11月下旬~12/25)，木屋小攤賣熱紅酒、香腸、聖誕雜貨，暖呼呼超有氣氛，你們整趟都遇得到。", question:"你被什麼收服？", options:["熱紅酒","香腸熱狗","聖誕雜貨","燈飾氛圍"], reward:"聖誕夜遊者" },
+  "北海道大學 散步": { icon:"landmark", desc:"北大校園像座森林，銀杏並木、白楊道、雪景都很美，還能買到北大牛乳霜淇淋；友人特別推薦來散步。", question:"校園最美的是？", options:["銀杏並木","白楊道","雪中紅磚","牛奶霜淇淋"], reward:"北大散步者" },
+  "舊道廳 紅磚廳舍": { icon:"building", desc:"『赤れんが廳舍』是札幌地標級歷史建物，紅磚洋館配雪景很好拍，前庭大樹與對面餐廳都值得逛。", question:"你想細看？", options:["紅磚立面","前庭雪樹","館內展示","對面吃午餐"], reward:"赤れんが訪客" },
+  "六花亭 札幌本店": { icon:"coffee", desc:"北海道甜點名店六花亭的札幌本店，樓上咖啡廳可坐下吃甜點、喝咖啡歇腳，友人大推。", question:"你想點什麼？", options:["奶油葡萄夾心","現烤點心","霜淇淋","咖啡配窗景"], reward:"六花亭甜點客" },
+  "藻岩山 纜車夜景": { icon:"mountain", desc:"搭纜車＋迷你纜車登藻岩山頂，俯瞰札幌盆地夜景，是『日本新三大夜景』之一，冬夜格外閃耀。", question:"山頂天氣？", options:["超清澈","飄點雪","雲霧夢幻","冷到發抖也值得"], reward:"藻岩山夜景收藏家" },
+  "小樽運河散步": { icon:"waves", desc:"小樽運河沿岸的紅磚倉庫與瓦斯路燈，冬天積雪配燈光如童話，是北海道最經典的畫面之一。", question:"運河最美時刻？", options:["白天雪景","黃昏點燈","飄雪中","畫家幫你畫像"], reward:"小樽運河旅人" },
+  "堺町通 老街": { icon:"store", desc:"小樽最熱鬧的老街，北一硝子玻璃館、音樂盒堂、蒸氣鐘、甜點名店一路排開，好逛好買好拍。", question:"你最想逛？", options:["玻璃工藝","音樂盒堂","甜點試吃","蒸氣鐘拍照"], reward:"堺町通尋寶者" },
+  "三角市場": { icon:"store", desc:"小樽車站旁的小巧市場，斜坡兩排海鮮攤，可現點海鮮丼、烤帝王蟹腳，友人推薦的在地味。", question:"你想吃／帶走？", options:["海鮮丼","烤帝王蟹腳","現剖海膽","新鮮干貝"], reward:"三角市場食客" },
+  "北海道神宮": { icon:"landmark", desc:"円山公園旁的北海道總鎮守，雪中鳥居與參道莊嚴寧靜，境內茶屋『六花亭』的現烤麻糬必吃。", question:"你為誰祈願？", options:["自己工作/學業","家人健康","旅途平安","戀愛順利"], reward:"北海道神宮參拜者" },
+  "圓山動物園": { icon:"bird", desc:"就在札幌市區的圓山動物園，下雪時看北極熊、雪豹別有味道，比旭山近很多、不用早起(館內較溫暖但氣味較重)。", question:"你最想看？", options:["北極熊","雪豹","紅毛猩猩","企鵝館"], reward:"圓山動物園之友" },
+  "中島公園": { icon:"landmark", desc:"市區裡的靜謐公園，重要文化財『豐平館』洋館與日本庭園在雪中格外優雅，散步很舒服。", question:"公園最吸引你？", options:["豐平館洋館","雪中池畔","日本庭園","餵鴨子"], reward:"中島公園旅人" },
+  "札幌場外市場": { icon:"store", desc:"札幌人採買海產的『場外市場』，帝王蟹、毛蟹、干貝乾、海膽一應俱全，也有食堂可現吃海鮮丼。", question:"想帶走什麼？", options:["帝王蟹","干貝乾","海膽","毛蟹味噌湯"], reward:"場外市場達人" },
+  "新千歲機場 掃貨": { icon:"gift", desc:"新千歲是全日本最好逛的機場之一：Royce巧克力工廠、哆啦A夢樂園、拉麵道場、各家北海道銘菓限定，最後採買一次到位。", question:"回國前重點？", options:["Royce生巧克力","限定伴手禮","再嗑一碗拉麵","哆啦A夢周邊"], reward:"新千歲掃貨王" },
+};
+
+// —— 出發前檢查清單 ——
+const checklistItems = [
+  "護照（效期 6 個月以上）", "Visit Japan Web 已登錄、QR 已截圖", "eSIM / 網卡已買",
+  "日圓現金（每人 3～5 萬）", "國際信用卡（Visa/Master）", "常備藥、暈車藥",
+  "防寒大衣／羽絨外套（白天0°C、早晚-6°C）", "發熱衣＋厚襪＋手套毛帽圍巾", "防滑雪靴（札幌路面結冰，最重要！）",
+  "暖暖包（貼式＋握式多帶）", "保濕乳液、護唇膏（冬天超乾）", "行李箱留空間裝伴手禮"
+];
+
+// —— 保命日語 ——
+const japanesePhrases = [
+  { cat:"基本", items:[
+    { jp:"すみません", romaji:"su-mi-ma-sen", zh:"不好意思／請問（萬用）" },
+    { jp:"ありがとうございます", romaji:"a-ri-ga-tou go-za-i-masu", zh:"謝謝" },
+    { jp:"はい／いいえ", romaji:"ha-i／i-i-e", zh:"是／不是" },
+    { jp:"大丈夫です", romaji:"dai-jou-bu desu", zh:"沒關係／不用了" },
+    { jp:"日本語が分かりません", romaji:"ni-hon-go ga wa-ka-ri-ma-sen", zh:"我不懂日文" },
+    { jp:"ゆっくり話してください", romaji:"yuk-ku-ri ha-na-shi-te ku-da-sai", zh:"請說慢一點" },
+  ]},
+  { cat:"點餐", items:[
+    { jp:"○名です", romaji:"○mei desu", zh:"我們○個人（進店先講人數）" },
+    { jp:"これをください", romaji:"ko-re wo ku-da-sai", zh:"我要這個（指菜單）" },
+    { jp:"おすすめは何ですか", romaji:"o-su-su-me wa nan desu ka", zh:"有什麼推薦的？" },
+    { jp:"英語のメニューはありますか", romaji:"ei-go no menu wa a-ri-masu ka", zh:"有英文菜單嗎？" },
+    { jp:"一つ／二つ／三つ", romaji:"hito-tsu／futa-tsu／mit-tsu", zh:"一個／兩個／三個" },
+    { jp:"替玉お願いします", romaji:"kae-dama o-ne-gai shi-masu", zh:"我要加麵（拉麵店）" },
+    { jp:"水をください", romaji:"mizu wo ku-da-sai", zh:"請給我水" },
+    { jp:"持ち帰りできますか", romaji:"mo-chi-kae-ri de-ki-masu ka", zh:"可以外帶嗎？" },
+    { jp:"とても美味しいです", romaji:"to-te-mo o-i-shii desu", zh:"非常好吃！" },
+    { jp:"お会計お願いします", romaji:"o-kai-kei o-ne-gai shi-masu", zh:"買單" },
+  ]},
+  { cat:"辣度・口味・過敏", items:[
+    { jp:"辛くできますか", romaji:"kara-ku de-ki-masu ka", zh:"可以做辣一點嗎？" },
+    { jp:"辛さ控えめでお願いします", romaji:"kara-sa hi-ka-e-me de o-ne-gai shi-masu", zh:"請做小辣／不要太辣" },
+    { jp:"辛くしないでください", romaji:"kara-ku shi-nai-de ku-da-sai", zh:"請不要辣" },
+    { jp:"ねぎ抜きでお願いします", romaji:"negi nuki de o-ne-gai shi-masu", zh:"請不要加蔥（換字可說不要某料）" },
+    { jp:"○○アレルギーがあります", romaji:"○○ a-re-ru-gii ga a-ri-masu", zh:"我對○○過敏（例：卵＝蛋）" },
+  ]},
+  { cat:"問路・方向", items:[
+    { jp:"トイレはどこですか", romaji:"toi-re wa do-ko desu ka", zh:"廁所在哪裡？" },
+    { jp:"○○はどこですか", romaji:"○○ wa do-ko desu ka", zh:"○○在哪裡？（填地名／店名）" },
+    { jp:"駅はどこですか", romaji:"eki wa do-ko desu ka", zh:"車站在哪裡？" },
+    { jp:"まっすぐ", romaji:"mas-su-gu", zh:"直走" },
+    { jp:"右／左", romaji:"mi-gi／hi-da-ri", zh:"右／左" },
+    { jp:"右に曲がってください", romaji:"mi-gi ni ma-gat-te ku-da-sai", zh:"請右轉" },
+    { jp:"左に曲がってください", romaji:"hi-da-ri ni ma-gat-te ku-da-sai", zh:"請左轉" },
+    { jp:"ここから遠いですか", romaji:"ko-ko ka-ra too-i desu ka", zh:"從這裡很遠嗎？" },
+    { jp:"歩いて行けますか", romaji:"a-ru-i-te i-ke-masu ka", zh:"走得到嗎？" },
+    { jp:"地図で教えてください", romaji:"chi-zu de o-shi-e-te ku-da-sai", zh:"請在地圖上指給我看" },
+  ]},
+  { cat:"購物", items:[
+    { jp:"いくらですか", romaji:"i-ku-ra desu ka", zh:"多少錢？" },
+    { jp:"免税できますか", romaji:"men-zei de-ki-masu ka", zh:"可以免稅嗎？" },
+    { jp:"カード使えますか", romaji:"kaa-do tsu-ka-e-masu ka", zh:"可以刷卡嗎？" },
+    { jp:"試着してもいいですか", romaji:"shi-cha-ku shi-te mo ii desu ka", zh:"可以試穿嗎？" },
+    { jp:"袋をください", romaji:"fu-ku-ro wo ku-da-sai", zh:"請給我袋子" },
+  ]},
+  { cat:"緊急・求助", items:[
+    { jp:"助けてください", romaji:"ta-su-ke-te ku-da-sai", zh:"請幫幫我（緊急）" },
+    { jp:"写真を撮ってもらえますか", romaji:"sha-shin wo tot-te mo-ra-e-masu ka", zh:"可以幫我拍照嗎？" },
+    { jp:"具合が悪いです", romaji:"gu-a-i ga wa-ru-i desu", zh:"我身體不舒服" },
+    { jp:"病院はどこですか", romaji:"byou-in wa do-ko desu ka", zh:"醫院在哪裡？" },
+  ]},
+];
+
+// —— 必買清單 ——
+const shoppingList = [
+  { cat:"食品伴手禮", items:["白い恋人 白色戀人","ROYCE' 生巧克力","六花亭 奶油葡萄夾心餅","薯條三兄弟 じゃがポックル","LeTAO 起司蛋糕","北菓楼 妖精之森年輪蛋糕"] },
+  { cat:"藥妝・零食", items:["北海道限定 Calbee 薯條／じゃがりこ","北海道限定 Kit Kat／Pocky","昆布・鮭魚乾・干貝糖","蒸氣眼罩・休足時間","柳月 三方六年輪","白色戀人霜淇淋(現吃)"] },
+  { cat:"雜貨・電器", items:["唐吉訶德 掃貨","BicCamera／Yodobashi 電器","無印良品 限定","北歐雜貨・雪國小物"] },
+];
+
+// —— 北海道冬季活動（那時段的活動，參考用）——
+const festivals = [
+  {
+    name:"札幌白色燈樹節", jp:"さっぽろホワイトイルミネーション",
+    dateStr:"11月下旬 ～ 12月下旬（大通會場）", overlap:true,
+    place:"大通公園、站前通、南一条通", from:"地下鐵『大通』站直結",
+    desc:"札幌冬季代表祭典，大通公園被數十萬顆燈泡點亮，從電視塔沿線延伸，免費、每晚都有，你們整段檔期都遇得到。",
+    tags:["整段檔期都有","免費","夜晚必看"],
+    links:[
+      { label:"官方網站", url:"https://www.sapporo.travel/white-illumination/", type:"web" },
+      { label:"YouTube 介紹", url:"https://www.youtube.com/results?search_query=さっぽろホワイトイルミネーション", type:"yt" },
+    ]
+  },
+  {
+    name:"慕尼黑聖誕市集", jp:"ミュンヘン・クリスマス市 in Sapporo",
+    dateStr:"11月下旬 ～ 12/25", overlap:true,
+    place:"大通公園 2丁目", from:"地下鐵『大通』站",
+    desc:"與德國慕尼黑締結姊妹市的正宗聖誕市集，木屋小攤賣熱紅酒、德式香腸、聖誕雜貨，暖呼呼超有氛圍，對到你們整趟。",
+    tags:["熱紅酒","德式小攤","聖誕氛圍"],
+    links:[
+      { label:"官方網站", url:"https://www.sapporo.travel/white-illumination/event/munich/", type:"web" },
+      { label:"YouTube 介紹", url:"https://www.youtube.com/results?search_query=ミュンヘンクリスマス市+札幌", type:"yt" },
+    ]
+  },
+  {
+    name:"小樽 雪物語・運河點燈", jp:"おたるゆき物語",
+    dateStr:"11月 ～ 隔年2月", overlap:true,
+    place:"小樽運河周邊", from:"JR小樽站步行10分",
+    desc:"小樽冬季點燈，運河飄浮『青之運河』藍色燈球、雪與瓦斯燈相映，可安排在小樽那天傍晚順看。",
+    tags:["藍色點燈","運河雪景","順路小樽"],
+    links:[
+      { label:"小樽觀光官網", url:"https://otaru.gr.jp/", type:"web" },
+      { label:"YouTube 介紹", url:"https://www.youtube.com/results?search_query=小樽ゆき物語+青の運河", type:"yt" },
+    ]
+  },
+];
+
+// —— 備選口袋名單（沒排進行程的北海道必去＋美食）——
+const altData = [
+  { cat:"札幌市區・順路(有空檔可加)", items:[
+    { name:"白色戀人公園", note:"巧克力工廠英式庭園、冬季點燈；友人說團客多，東西機場也買得到，時間有限可略過" },
+    { name:"JR TOWER 展望室 T38", note:"札幌站上方38樓看夜景，下雪或天氣差時的室內備案" },
+    { name:"莫埃來沼公園", note:"安藤忠雄設計，但冬天空曠、風大、冷爆，友人不推薦冬季去" },
+  ]},
+  { cat:"近郊・溫泉(想放慢或加天)", items:[
+    { name:"定山溪溫泉", note:"離札幌約1小時，雪見溫泉＋二見吊橋，最不累的泡湯" },
+    { name:"登別溫泉・地獄谷", note:"北海道溫泉代表，火山雪景，但來回約3小時較遠" },
+    { name:"旭山動物園(旭川)", note:"企鵝散步約12月中下旬才開始(2025為12/18)，你們12月初遇不到；想看企鵝走路要排晚一點的行程" },
+    { name:"支笏湖", note:"日本最北不凍湖，湛藍湖景，1月有冰濤祭" },
+  ]},
+  { cat:"雪上活動・滑雪", items:[
+    { name:"札幌國際滑雪場", note:"離市區約1.5小時，適合初學者體驗滑雪" },
+    { name:"NISEKO 二世古", note:"世界級粉雪聖地" },
+    { name:"札幌雪祭(2月)", note:"さっぽろ雪まつり在2月，你們差一點，明年可衝" },
+  ]},
+  { cat:"北海道美食・老味道", items:[
+    { name:"螃蟹會席／吃到飽", note:"帝王蟹、松葉蟹、毛蟹，冬季必吃" },
+    { name:"迴轉壽司 トリトン／なごやか亭", note:"用料大方、CP值超高" },
+    { name:"ザンギ 北海道炸雞", note:"居酒屋下酒名物" },
+    { name:"六花亭／北菓楼／LeTAO", note:"北海道三大甜點" },
+    { name:"濃厚牛乳霜淇淋", note:"冷天也要吃一支" },
+  ]},
+];
+
+/* =================================================================
+   ⑤ Firebase 設定：把你自己的金鑰貼進來（教學文件 STEP 5）
+   還沒設定前，分帳頁會顯示教學卡、其他功能照常運作
+   ================================================================= */
+const firebaseConfig = {
+  apiKey:            "AIzaSyBzyhxCJpjBXq_ARXodUOu6vi_DdL-lbAU",
+  authDomain:        "fukuoka-trip2026.firebaseapp.com",
+  databaseURL:       "https://fukuoka-trip2026-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:         "fukuoka-trip2026",
+  storageBucket:     "fukuoka-trip2026.firebasestorage.app",
+  messagingSenderId: "423884388829",
+  appId:             "1:423884388829:web:7cd1e8f64fa2300f795e34"
+};
+// 這一團的「房間代號」，同一團的人代號要一樣，資料才會同步
+const TRIP_CODE = "sapporo-2026";
+// 判斷是否已設定（還是占位字串就當作沒設定）
+const FIREBASE_READY = !firebaseConfig.databaseURL.includes("貼上");
+
+
+/* =================================================================
+   程式邏輯（要改行程通常不用動這裡）
+   ================================================================= */
+let RATE = 0.215;            // 1 JPY = ? TWD
+let expenses = [];           // 從 Firebase 同步下來的花費陣列
+let db = null;
+
+// —— 分頁切換 ——
+function switchMainTab(key){
+  document.querySelectorAll('.main-view').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.top-nav-item').forEach(el=>el.classList.remove('active'));
+  document.getElementById('view-'+key).classList.add('active');
+  document.getElementById('top-tab-'+key).classList.add('active');
+  window.scrollTo({top:0, behavior:'smooth'});
+  lucide.createIcons();
+}
+
+// —— Toast 小提示 ——
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.opacity = '1'; t.style.transform = 'translate(-50%, -6px)';
+  setTimeout(()=>{ t.style.opacity='0'; t.style.transform='translate(-50%,0)'; }, 1800);
+}
+
+/* ---------- 行程 ---------- */
+let currentDay = 1;
+function renderDayTabs(){
+  const box = document.getElementById('day-tabs');
+  box.innerHTML = Object.keys(tripDaysData).map(n=>{
+    const active = (+n===currentDay);
+    return `<button onclick="switchDay(${n})"
+      class="px-4 py-2 rounded-full text-sm whitespace-nowrap ${active?'bg-brand text-white':'bg-white text-gray-500'} shadow-sm">
+      Day ${n}<span class="opacity-70 ml-1">${tripDaysData[n].dateStr.slice(0,5)}</span></button>`;
+  }).join('');
+}
+function switchDay(n){ currentDay=n; renderDayTabs(); renderDay(); }
+
+function renderDay(){
+  const d = tripDaysData[currentDay];
+  // 地圖
+  document.getElementById('day-map').src =
+    'https://maps.google.com/maps?q='+encodeURIComponent(d.mapQuery)+'&output=embed';
+  // 亮點（有 quest 的就做成可點的探索卡）
+  document.getElementById('day-highlights').innerHTML = d.highlights.map(h=>{
+    const done = !!getQuestState()[h.key];
+    return `<button onclick="openQuest('${h.key}')"
+       class="quest-card ${done?'done':''} bg-white border border-transparent rounded-2xl p-3 text-left shadow-sm">
+       <div class="flex items-center justify-between">
+         <span class="font-bold text-sm">${h.title}</span>
+         ${done?'<i data-lucide="badge-check" class="w-4 h-4 text-brand"></i>':'<i data-lucide="sparkles" class="w-4 h-4 text-brand/60"></i>'}
+       </div>
+       <p class="text-xs text-gray-500 mt-1">${h.sub}</p>
+       <p class="text-[11px] text-brand mt-1">${done?'已完成小探索':'點我開始小探索'}</p>
+    </button>`;
+  }).join('');
+  // 時間軸
+  document.getElementById('day-timeline').innerHTML = `
+    <div class="bg-white rounded-2xl p-4 shadow-sm mb-3">
+      <p class="font-serif text-lg font-bold">${d.title}</p>
+      <p class="text-sm text-gray-500 mt-1">${d.desc}</p>
+      ${d.transport?`<div class="flex items-start gap-2 text-xs text-brandDark mt-3 pt-3 border-t border-[#F0E6DC]">
+        <i data-lucide="route" class="w-4 h-4 mt-0.5 shrink-0"></i><span>${d.transport}</span></div>`:''}
+      ${d.budget?`<div class="flex items-start gap-2 text-xs text-brandDark mt-2">
+        <i data-lucide="wallet" class="w-4 h-4 mt-0.5 shrink-0"></i><span>${d.budget}</span></div>`:''}
+    </div>
+    <div class="relative pl-8">
+      <div class="timeline-line absolute left-3 top-2 bottom-2 w-0.5"></div>
+      ${d.activities.map(a=>{
+        const isSpot = (a.category==='景點') && spotData[a.title];
+        const clickAttr = a.dining ? `onclick="openDining('${a.dining}')"`
+                        : (isSpot ? `onclick="openSpot('${a.title.replace(/'/g,"\\'")}')"` : '');
+        const done = isSpot && getQuestState()[a.title];
+        const optBadge = a.opt===true
+          ? '<span class="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">可省略加碼</span>'
+          : (a.opt===false ? '<span class="text-[10px] bg-brand/10 text-brandDark px-2 py-0.5 rounded-full">順路輕鬆玩</span>' : '');
+        const hint = a.dining ? '<span class="text-[10px] text-brand font-semibold">🍽 3家推薦 ›</span>'
+                   : (isSpot ? `<span class="text-[10px] text-brand font-semibold">${done?'✓ 已留下回憶':'✦ 小探索 ›'}</span>` : '');
+        return `
+        <div class="relative mb-4">
+          <div class="absolute -left-8 top-0 w-6 h-6 rounded-full bg-brand/15 flex items-center justify-center">
+            <i data-lucide="${a.icon}" class="w-3.5 h-3.5 text-brand"></i>
+          </div>
+          <div class="bg-white rounded-2xl p-3 shadow-sm ${(a.dining||isSpot)?'cursor-pointer active:scale-[0.99] transition':''}" ${clickAttr}>
+            <div class="flex justify-between items-center gap-2">
+              <span class="font-bold text-sm">${a.title}</span>
+              <span class="text-xs text-brand font-semibold shrink-0">${a.time}</span>
+            </div>
+            ${a.sub?`<p class="text-xs text-gray-500 mt-1">${a.sub}</p>`:''}
+            <div class="flex items-center gap-1.5 mt-2 flex-wrap">
+              <span class="text-[10px] bg-cream text-brandDark px-2 py-0.5 rounded-full">${a.category}</span>
+              ${optBadge}${hint}
+            </div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  lucide.createIcons();
+}
+
+/* ---------- 小探索（存在 localStorage） ---------- */
+const QUEST_STORAGE_KEY = 'fukuokaQuestState';
+function getQuestState(){ try{ return JSON.parse(localStorage.getItem(QUEST_STORAGE_KEY)||'{}'); }catch(e){ return {}; } }
+let activeQuestKey = null;
+function openQuest(key){
+  activeQuestKey = key;
+  const q = questData[key]; if(!q) return;
+  document.getElementById('quest-title').textContent = q.title;
+  document.getElementById('quest-desc').textContent = q.desc;
+  document.getElementById('quest-question').textContent = q.question;
+  document.getElementById('quest-reward').textContent = q.reward;
+  document.getElementById('quest-icon').setAttribute('data-lucide', q.icon);
+  const done = getQuestState()[key];
+  document.getElementById('quest-options').innerHTML = q.options.map((o,i)=>`
+    <button onclick="completeQuest(${i})"
+      class="w-full text-left border rounded-xl px-3 py-2 text-sm ${done&&done.selectedOption===i?'bg-brand text-white border-brand':'bg-white'}">
+      ${o}</button>`).join('');
+  document.getElementById('quest-modal').classList.remove('hidden');
+  lucide.createIcons();
+}
+function closeQuest(){ document.getElementById('quest-modal').classList.add('hidden'); }
+// 景點小探索：跟 highlight 小探索共用同一個 modal，只是資料來自 spotData
+function openSpot(key){
+  const s = spotData[key]; if(!s) return;
+  activeQuestKey = key;
+  document.getElementById('quest-title').textContent = key.replace(/^\(加碼\)/,'');
+  document.getElementById('quest-desc').textContent = s.desc;
+  document.getElementById('quest-question').textContent = s.question;
+  document.getElementById('quest-reward').textContent = s.reward;
+  document.getElementById('quest-icon').setAttribute('data-lucide', s.icon);
+  const done = getQuestState()[key];
+  document.getElementById('quest-options').innerHTML = s.options.map((o,i)=>`
+    <button onclick="completeQuest(${i})"
+      class="w-full text-left border rounded-xl px-3 py-2 text-sm ${done&&done.selectedOption===i?'bg-brand text-white border-brand':'bg-white'}">
+      ${o}</button>`).join('');
+  document.getElementById('quest-modal').classList.remove('hidden');
+  lucide.createIcons();
+}
+function completeQuest(optionIndex){
+  const state = getQuestState();
+  const first = !state[activeQuestKey];
+  state[activeQuestKey] = { completedAt:new Date().toISOString(), selectedOption:optionIndex };
+  localStorage.setItem(QUEST_STORAGE_KEY, JSON.stringify(state));
+  closeQuest(); renderDay();
+  const reward = ((questData[activeQuestKey]||spotData[activeQuestKey]||{}).reward) || '回憶';
+  showToast(first ? '🏅 獲得徽章：'+reward : '已更新');
+}
+// 餐點 3 選 modal
+function openDining(key){
+  const d = diningOptions[key]; if(!d) return;
+  document.getElementById('dining-title').textContent = d.title;
+  document.getElementById('dining-tip').textContent = d.tip||'';
+  document.getElementById('dining-list').innerHTML = d.items.map(o=>{
+    const q = encodeURIComponent(o.name);
+    const map = 'https://www.google.com/maps/search/'+q;
+    const yt  = 'https://www.youtube.com/results?search_query='+q;
+    return `<div class="bg-white rounded-2xl p-3 shadow-sm">
+      <p class="font-bold text-sm">${o.name}</p>
+      <p class="text-xs text-gray-500 mt-1">${o.note}</p>
+      <div class="flex gap-2 mt-2">
+        <a href="${map}" target="_blank" class="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-full bg-brand/10 text-brandDark"><i data-lucide="map-pin" class="w-3.5 h-3.5"></i>地圖・評價</a>
+        <a href="${yt}" target="_blank" class="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-full bg-red-50 text-red-600"><i data-lucide="youtube" class="w-3.5 h-3.5"></i>影片</a>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('dining-modal').classList.remove('hidden');
+  lucide.createIcons();
+}
+function closeDining(){ document.getElementById('dining-modal').classList.add('hidden'); }
+function resetQuestState(){
+  if(confirm('確定要重置所有小探索的紀錄嗎？')){
+    localStorage.removeItem(QUEST_STORAGE_KEY); renderDay(); showToast('小探索已重置！');
+  }
+}
+
+/* ---------- 勾選清單（檢查清單 / 必買，共用同一套） ---------- */
+function makeCheckList(containerId, storageKey, groups){
+  const state = (()=>{ try{ return JSON.parse(localStorage.getItem(storageKey)||'{}'); }catch(e){ return {}; } })();
+  const box = document.getElementById(containerId);
+  const render = ()=>{
+    box.innerHTML = groups.map(g=>`
+      ${g.cat?`<p class="font-bold text-brandDark text-sm mt-2 mb-1 px-2">${g.cat}</p>`:''}
+      ${g.items.map(item=>{
+        const id = storageKey+'::'+item;
+        const on = !!state[id];
+        return `<label class="flex items-center gap-3 px-2 py-2 cursor-pointer">
+          <input type="checkbox" ${on?'checked':''} onchange="window.__toggle('${storageKey}','${id.replace(/'/g,"\\'")}')"
+                 class="w-5 h-5 accent-brand rounded">
+          <span class="text-sm ${on?'line-through text-gray-400':''}">${item}</span>
+        </label>`;
+      }).join('')}`).join('');
+  };
+  window.__toggle = (sk, id)=>{
+    const s = JSON.parse(localStorage.getItem(sk)||'{}');
+    s[id] = !s[id]; localStorage.setItem(sk, JSON.stringify(s));
+    Object.assign(state, s); render();
+  };
+  render();
+}
+
+/* ---------- 備選口袋名單 ---------- */
+function renderAlt(){
+  document.getElementById('alt-container').innerHTML = altData.map(g=>`
+    <div>
+      <p class="font-bold text-brandDark mb-2">${g.cat}</p>
+      <div class="space-y-2">
+        ${g.items.map(o=>{
+          const q = encodeURIComponent(o.name);
+          return `<div class="bg-white rounded-2xl p-3 shadow-sm">
+            <p class="font-bold text-sm">${o.name}</p>
+            <p class="text-xs text-gray-500 mt-1">${o.note}</p>
+            <div class="flex gap-2 mt-2">
+              <a href="https://www.google.com/maps/search/${q}" target="_blank" class="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-full bg-brand/10 text-brandDark"><i data-lucide="map-pin" class="w-3.5 h-3.5"></i>地圖・評價</a>
+              <a href="https://www.youtube.com/results?search_query=${q}" target="_blank" class="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-full bg-red-50 text-red-600"><i data-lucide="youtube" class="w-3.5 h-3.5"></i>影片</a>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`).join('');
+  lucide.createIcons();
+}
+
+/* ---------- 北海道冬季活動 ---------- */
+function renderFestivals(){
+  document.getElementById('festival-container').innerHTML = festivals.map(f=>`
+    <div class="bg-white rounded-2xl p-4 shadow-sm">
+      <div class="flex items-start justify-between gap-2">
+        <div>
+          <p class="font-serif text-lg font-bold">${f.name}</p>
+          <p class="text-xs text-gray-400">${f.jp}</p>
+        </div>
+        ${f.overlap
+          ? '<span class="text-[10px] bg-brand text-white px-2 py-1 rounded-full whitespace-nowrap">✔ 檔期重疊</span>'
+          : '<span class="text-[10px] bg-gray-100 text-gray-500 px-2 py-1 rounded-full whitespace-nowrap">時間偏晚</span>'}
+      </div>
+      <div class="flex items-center gap-2 text-sm text-brandDark font-semibold mt-2">
+        <i data-lucide="calendar-days" class="w-4 h-4"></i>${f.dateStr}
+      </div>
+      <div class="flex items-start gap-2 text-xs text-gray-500 mt-1">
+        <i data-lucide="map-pin" class="w-3.5 h-3.5 mt-0.5"></i><span>${f.place}</span>
+      </div>
+      <div class="flex items-start gap-2 text-xs text-gray-500 mt-1">
+        <i data-lucide="train" class="w-3.5 h-3.5 mt-0.5"></i><span>${f.from}</span>
+      </div>
+      <p class="text-sm mt-3 leading-relaxed">${f.desc}</p>
+      <div class="flex flex-wrap gap-1 mt-2">
+        ${f.tags.map(t=>`<span class="text-[10px] bg-cream text-brandDark px-2 py-0.5 rounded-full">#${t}</span>`).join('')}
+      </div>
+      <div class="flex flex-wrap gap-2 mt-3">
+        ${f.links.map(l=>`<a href="${l.url}" target="_blank"
+          class="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-full ${l.type==='yt'?'bg-red-50 text-red-600':'bg-brand/10 text-brandDark'}">
+          <i data-lucide="${l.type==='yt'?'youtube':'external-link'}" class="w-3.5 h-3.5"></i>${l.label}</a>`).join('')}
+      </div>
+    </div>`).join('');
+  lucide.createIcons();
+}
+
+/* ---------- 保命日語 ---------- */
+function renderPhrases(){
+  document.getElementById('phrase-container').innerHTML = japanesePhrases.map(g=>`
+    <div>
+      <p class="font-bold text-brandDark mb-2">${g.cat}</p>
+      <div class="space-y-2">
+        ${g.items.map(p=>`
+          <div class="bg-white rounded-2xl p-3 shadow-sm">
+            <p class="text-lg font-bold">${p.jp}</p>
+            <p class="text-xs text-gray-400">${p.romaji}</p>
+            <p class="text-sm text-brandDark mt-1">${p.zh}</p>
+          </div>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+/* =================================================================
+   ⑥ 分帳（Firebase 即時共用）
+   ================================================================= */
+function initAccounting(){
+  const setup = document.getElementById('firebase-setup');
+  const body  = document.getElementById('acc-body');
+
+  if(!FIREBASE_READY){                 // 還沒設定 → 顯示教學卡
+    setup.classList.remove('hidden');
+    return;
+  }
+  setup.classList.add('hidden');
+  body.classList.remove('hidden');
+
+  // 連 Firebase
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.database();
+
+  // 下拉選單填入團員
+  const payer = document.getElementById('exp-payer');
+  payer.innerHTML = MEMBERS.map(m=>`<option>${m}</option>`).join('');
+  document.getElementById('exp-beneficiaries').innerHTML = MEMBERS.map(m=>`
+    <label class="text-xs border rounded-full px-2 py-1 cursor-pointer">
+      <input type="checkbox" class="ben-box mr-1 accent-brand" value="${m}" checked>${m}</label>`).join('');
+
+  // 即時監聽：任何人新增/刪除，所有人畫面自動更新
+  db.ref('trips/'+TRIP_CODE+'/expenses').on('value', snap=>{
+    const val = snap.val() || {};
+    expenses = Object.keys(val).map(id=>({ id, ...val[id] }));
+    renderAccounting();
+  });
+}
+
+function addExpense(){
+  const title = document.getElementById('exp-title').value.trim();
+  const amount = parseFloat(document.getElementById('exp-amount').value);
+  if(!title || !amount){ showToast('請填項目和金額'); return; }
+  const beneficiaries = [...document.querySelectorAll('.ben-box:checked')].map(b=>b.value);
+  if(beneficiaries.length===0){ showToast('至少要分給一個人'); return; }
+
+  const record = {
+    title,
+    amount,
+    currency: document.getElementById('exp-currency').value,
+    payer:    document.getElementById('exp-payer').value,
+    category: document.getElementById('exp-category').value,
+    beneficiaries,
+    createdAt: Date.now()
+  };
+  db.ref('trips/'+TRIP_CODE+'/expenses').push(record);   // 推上 Firebase
+  document.getElementById('exp-title').value = '';
+  document.getElementById('exp-amount').value = '';
+  showToast('已記一筆 ✅');
+}
+
+function deleteExpense(id){
+  if(confirm('刪除這筆花費？')) db.ref('trips/'+TRIP_CODE+'/expenses/'+id).remove();
+}
+
+// 把任何幣別換算成日圓（結算統一用日圓算）
+function toJPY(amount, currency){ return currency==='TWD' ? amount/RATE : amount; }
+
+function renderAccounting(){
+  // 1) 每人結餘 = 幫大家墊付的 − 自己該分攤的
+  const bal = {}; MEMBERS.forEach(m=>bal[m]=0);
+  expenses.forEach(e=>{
+    const jpy = toJPY(e.amount, e.currency);
+    const share = jpy / e.beneficiaries.length;
+    bal[e.payer] = (bal[e.payer]||0) + jpy;         // 付錢的先加全額
+    e.beneficiaries.forEach(b=> bal[b] = (bal[b]||0) - share); // 每個分攤者扣一份
+  });
+
+  // 2) 每人結餘卡
+  document.getElementById('members-balance-container').innerHTML = MEMBERS.map(m=>{
+    const v = Math.round(bal[m]||0);
+    const color = v>0?'text-green-600':(v<0?'text-red-500':'text-gray-400');
+    const txt = v>0?`應收 ¥${v}`:(v<0?`應付 ¥${-v}`:'剛好');
+    return `<div class="bg-white rounded-xl p-3 shadow-sm">
+      <p class="text-sm font-bold">${m}</p><p class="text-xs ${color}">${txt}</p></div>`;
+  }).join('');
+
+  // 3) 結算：最少筆數「誰還誰」
+  document.getElementById('settlement-list').innerHTML =
+    settle(bal).map(s=>`
+      <div class="bg-white rounded-xl p-3 shadow-sm flex items-center justify-between text-sm">
+        <span><b>${s.from}</b> → <b>${s.to}</b></span>
+        <span class="text-brand font-bold">¥${s.amount}（約 NT$${Math.round(s.amount*RATE)}）</span>
+      </div>`).join('') || '<p class="text-sm text-gray-400">目前沒有需要結算的款項</p>';
+
+  // 4) 花費明細
+  document.getElementById('expense-list-container').innerHTML = expenses
+    .slice().sort((a,b)=>b.createdAt-a.createdAt).map(e=>`
+      <div class="bg-white rounded-xl p-3 shadow-sm flex items-center justify-between">
+        <div>
+          <p class="text-sm font-bold">${e.category.split(' ')[0]} ${e.title}</p>
+          <p class="text-xs text-gray-500">${e.payer} 付 · 分 ${e.beneficiaries.length} 人</p>
+        </div>
+        <div class="text-right">
+          <p class="text-sm font-bold">${e.currency==='JPY'?'¥':'NT$'}${e.amount}</p>
+          <button onclick="deleteExpense('${e.id}')" class="text-[11px] text-red-400">刪除</button>
+        </div>
+      </div>`).join('') || '<p class="text-sm text-gray-400">還沒有任何花費</p>';
+}
+
+// 結算演算法：把「應收的人」和「應付的人」配對，湊出最少的還款筆數
+function settle(bal){
+  const creditors = [], debtors = [];
+  Object.keys(bal).forEach(m=>{
+    const v = Math.round(bal[m]);
+    if(v>0) creditors.push({m, v});
+    else if(v<0) debtors.push({m, v:-v});
+  });
+  creditors.sort((a,b)=>b.v-a.v); debtors.sort((a,b)=>b.v-a.v);
+  const res = []; let i=0, j=0;
+  while(i<debtors.length && j<creditors.length){
+    const pay = Math.min(debtors[i].v, creditors[j].v);
+    if(pay>0) res.push({ from:debtors[i].m, to:creditors[j].m, amount:pay });
+    debtors[i].v -= pay; creditors[j].v -= pay;
+    if(debtors[i].v===0) i++;
+    if(creditors[j].v===0) j++;
+  }
+  return res;
+}
+
+function updateRate(){
+  RATE = parseFloat(document.getElementById('acc-rate-input').value) || 0.215;
+  if(FIREBASE_READY) renderAccounting();
+}
+
+/* =================================================================
+   啟動
+   ================================================================= */
+window.addEventListener('DOMContentLoaded', ()=>{
+  renderDayTabs(); renderDay();
+  makeCheckList('checklist', 'fukuokaChecklist', [{cat:'', items:checklistItems}]);
+  makeCheckList('shopping-container', 'fukuokaShopping', shoppingList);
+  renderPhrases();
+  renderFestivals();
+  renderAlt();
+  initAccounting();
+  lucide.createIcons();
+});
+</script>
+</body>
+</html>
